@@ -13,9 +13,9 @@ weights/
 data_regen/regenerated/
 
 # other stuff
-eagle_original/
-flashinfer/
-vllm/
+/eagle_original/
+/flashinfer/
+/vllm/
 
 # traineagle3
 **/*.log
