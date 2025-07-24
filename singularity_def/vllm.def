@@ -1,0 +1,23 @@
+Bootstrap: docker
+From: vllm/vllm-openai:latest
+
+%help
+  This container gives vllm
+
+%labels
+  Author Sean Ma
+
+%post
+  set -eux
+
+  # apt shit
+  apt-get update 1>/dev/null
+  apt-get upgrade -y 1>/dev/null
+  apt-get install -y htop nvtop ripgrep neovim 1>/dev/null
+
+  # test if binaries are available
+  /usr/bin/which htop    || (echo "htop missing" && exit 1)
+  /usr/bin/which nvtop   || (echo "nvtop missing" && exit 1)
+
+%runscript
+  exec "$@"

@@ -1,0 +1,60 @@
+Bootstrap: docker
+From: nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04
+
+%help
+    This container gives cuda 126
+
+%labels
+    Author Sean Ma
+
+%files
+    # predownload the cuda stuff from their site, 
+    # and put those in the same directory as this def file
+    # (the internet speed is painfully slow in the container)
+    cuda-ubuntu2404.pin /etc/apt/preferences.d/cuda-repository-pin-600
+    cuda-repo-ubuntu2404-12-6-local_12.6.0-560.28.03-1_amd64.deb /opt/
+
+%post
+    set -eux
+    
+    # apt shit
+    apt-get update 1>/dev/null
+    apt-get upgrade -y 1>/dev/null
+    apt-get install -y \
+        linux-headers-generic \
+        build-essential \
+        htop ripgrep tree vim neovim nvtop tmux zip unzip wget \
+        bzip2 ca-certificates libglib2.0-0 \
+        1>/dev/null
+    
+    # test if binaries are available
+    /usr/bin/which htop  || (echo "htop missing" && exit 1)
+    /usr/bin/which nvtop || (echo "nvtop missing" && exit 1)
+
+    # add cuda repo
+    if [ ! -f /opt/cuda-repo-ubuntu2404-12-6-local_12.6.0-560.28.03-1_amd64.deb ]; then
+        echo "cuda repo package does not exist"
+        exit 1
+    fi
+    if [ ! -f /etc/apt/preferences.d/cuda-repository-pin-600 ]; then
+        echo "cuda pin does not exist"
+        exit 1
+    fi
+    dpkg -i /opt/cuda-repo-ubuntu2404-12-6-local_12.6.0-560.28.03-1_amd64.deb 1>/dev/null
+    cp /var/cuda-repo-ubuntu2404-12-6-local/cuda-*-keyring.gpg /usr/share/keyrings/
+
+    # install cuda toolkit
+    apt-get update 1>/dev/null
+    apt-get install -y cuda-toolkit-12-6 1>/dev/null
+
+    # cleanup
+    apt-get clean 1>/dev/null
+    rm -rf /var/lib/apt/lists/* /opt/*.deb
+
+%environment
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$PATH
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    export CUDA_HOME=/usr/local/cuda
+
+%runscript
+    exec "$@"
