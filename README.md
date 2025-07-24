@@ -67,7 +67,7 @@ Author: Sean Ma
   ```
 - Or if you're on HPC, you might want to build the singularity image:
   ```bash
-  $ singuarity build --fakeroot singularity_def vllm.def
+  $ singuarity build --fakeroot vllm.sif vllm.def
   ```
 - Start the server using the script `benchmark/vllm/serve.sh` (some modifications are necessary to adapt to your environment).
 
@@ -83,7 +83,7 @@ Author: Sean Ma
   ```
 - Or if you're on HPC, you might want to build the singularity image:
   ```bash
-  $ singuarity build --fakeroot singularity_def sglang.def
+  $ singuarity build --fakeroot sglang.sif sglang.def
   ```
 - Start the server using the script `benchmark/sglang/serve.sh` (some modifications are necessary to adapt to your environment).
 
