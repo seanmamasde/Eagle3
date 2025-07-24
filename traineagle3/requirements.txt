@@ -1,0 +1,17 @@
+torch
+torchvision
+torchaudio
+transformers
+accelerate
+fschat
+gradio
+openai
+anthropic
+sentencepiece
+protobuf
+wandb
+datasets
+nvitop
+# has to be 0.16.9 according to this source (very reliable 😳😳):
+# https://mp.weixin.qq.com/s/Dmdg6aLgFHZEcm6TY1vKkA?poc_token=HL4Ed2ijU7GBKDVChqnG_1HtAERwO1gJ5TYynhZ3
+deepspeed==0.16.9
