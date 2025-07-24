@@ -1,0 +1,13 @@
+data_regen/regenerated/sharegpt_train_10pct.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_train_1pct.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/ultrachat_cleaned_test.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_gpt4_cleaned_test.json filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_gpt4_cleaned_test.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_gpt4_cleaned_train.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_gpt4_full_original.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_test_10pct.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/ultrachat_cleaned_train.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_small_test.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_small_train.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/sharegpt_test_1pct.jsonl filter=lfs diff=lfs merge=lfs -text
+data_regen/regenerated/ultrachat_17349_original.jsonl filter=lfs diff=lfs merge=lfs -text

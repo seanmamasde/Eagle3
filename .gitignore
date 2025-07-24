@@ -1,0 +1,24 @@
+# cache and shit
+**/__pycache__/
+
+# my shit
+print_files.py
+term_output.txt
+**/*.sif
+
+# weights (got from huggingface)
+weights/
+
+# datasets
+data_regen/regenerated/
+
+# other stuff
+eagle_original/
+flashinfer/
+vllm/
+
+# traineagle3
+**/*.log
+**/wandb/
+**/saved_models/
+**/cache.pt
