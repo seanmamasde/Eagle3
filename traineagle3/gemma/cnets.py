@@ -15,13 +15,12 @@ from configs import EConfig
 from datasets import load_dataset
 import multiprocessing
 
-# Copied from transformers.models.bart.modeling_bart._make_causal_mask
-
 
 def _make_causal_mask(
         input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device, past_key_values_length: int = 0
 ):
     """
+    Copied from transformers.models.bart.modeling_bart._make_causal_mask
     Make causal mask used for bi-directional self-attention.
     """
     bsz, tgt_len = input_ids_shape
@@ -36,11 +35,10 @@ def _make_causal_mask(
             tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
     return mask[None, None, :, :].expand(bsz, 1, tgt_len, tgt_len + past_key_values_length)
 
-# Copied from transformers.models.bart.modeling_bart._expand_mask
-
 
 def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
     """
+    Copied from transformers.models.bart.modeling_bart._expand_mask
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
     """
     bsz, src_len = mask.size()
@@ -127,7 +125,7 @@ class Gemma3RotaryEmbedding(torch.nn.Module):
 
 
 class Gemma3LinearScalingRotaryEmbedding(Gemma3RotaryEmbedding):
-    """LlamaRotaryEmbedding extended with linear scaling. Credits to the Reddit user /u/kaiokendev"""
+    """Gemma3RotaryEmbedding extended with linear scaling. Credits to the Reddit user /u/kaiokendev"""
 
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None, scaling_factor=1.0):
         self.scaling_factor = scaling_factor
@@ -148,8 +146,8 @@ class Gemma3LinearScalingRotaryEmbedding(Gemma3RotaryEmbedding):
                              None, None, :, :].to(dtype), persistent=False)
 
 
-class LlamaDynamicNTKScalingRotaryEmbedding(Gemma3RotaryEmbedding):
-    """LlamaRotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
+class Gemma3DynamicNTKScalingRotaryEmbedding(Gemma3RotaryEmbedding):
+    """Gemma3RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
 
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None, scaling_factor=1.0):
         self.scaling_factor = scaling_factor
@@ -179,7 +177,7 @@ class LlamaDynamicNTKScalingRotaryEmbedding(Gemma3RotaryEmbedding):
                              None, None, :, :].to(dtype), persistent=False)
 
 
-class LlamaAttention(nn.Module):
+class Gemma3Attention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(self, config):
@@ -219,7 +217,7 @@ class LlamaAttention(nn.Module):
                     self.head_dim, max_position_embeddings=self.max_position_embeddings, scaling_factor=scaling_factor
                 )
             elif scaling_type == "dynamic":
-                self.rotary_emb = LlamaDynamicNTKScalingRotaryEmbedding(
+                self.rotary_emb = Gemma3DynamicNTKScalingRotaryEmbedding(
                     self.head_dim, max_position_embeddings=self.max_position_embeddings, scaling_factor=scaling_factor
                 )
             else:
@@ -312,7 +310,7 @@ class LlamaAttention(nn.Module):
         return attn_output
 
 
-class LlamaMLP(nn.Module):
+class Gemma3MLP(nn.Module):
     def __init__(self, config, last=True):
         super().__init__()
         self.last = last
@@ -356,10 +354,10 @@ class LlamaMLP(nn.Module):
         return down_proj
 
 
-class LlamaRMSNorm(nn.Module):
+class Gemma3RMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         """
-        LlamaRMSNorm is equivalent to T5LayerNorm
+        Gemma3RMSNorm is equivalent to T5LayerNorm
         """
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
@@ -374,21 +372,21 @@ class LlamaRMSNorm(nn.Module):
         return self.weight * hidden_states.to(input_dtype)
 
 
-class LlamaDecoderLayeremb(nn.Module):
+class Gemma3DecoderLayeremb(nn.Module):
     def __init__(self, config, last=True):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = LlamaAttention(config=config)
-        self.mlp = LlamaMLP(config, last=last)
+        self.self_attn = Gemma3Attention(config=config)
+        self.mlp = Gemma3MLP(config, last=last)
         self.last = last
         # self.fc = nn.Linear(config.hidden_size * 2, config.hidden_size)
-        self.hidden_norm = LlamaRMSNorm(
+        self.hidden_norm = Gemma3RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps)
-        self.input_layernorm = LlamaRMSNorm(
+        self.input_layernorm = Gemma3RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps)
         # if self.index!=0:
 
-        self.post_attention_layernorm = LlamaRMSNorm(
+        self.post_attention_layernorm = Gemma3RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
@@ -487,21 +485,33 @@ class Model(nn.Module):
     def __init__(self, config, load_head=False, load_emb=True, path=None):
         super().__init__()
         # self.layers = nn.ModuleList(
-        #     [LlamaDecoderLayer(config, index=index) for index in range(config.num_hidden_layers)])
-        self.midlayer = LlamaDecoderLayeremb(config)
+        #     [Gemma3DecoderLayer(config, index=index) for index in range(config.num_hidden_layers)])
+        self.midlayer = Gemma3DecoderLayeremb(config)
+        from pprint import pprint
         self.gradient_checkpointing = False
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
-        self.hidden_size = config.hidden_size
+        # self.hidden_size = config.hidden_size
+        self.hidden_size = 2560
         self.draft_vocab_size = config.draft_vocab_size
-        self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        if self.draft_vocab_size is None:
+            self.draft_vocab_size = 45048
+        self.norm = Gemma3RMSNorm(self.hidden_size, eps=config.rms_norm_eps)
         self.length = 7
         self.target_model = Gemma3ForCausalLM.from_pretrained(
-            path, torch_dtype=torch.float16)
+            path, torch_dtype=torch.bfloat16, config=config,
+            attn_implementation='eager'
+            # low_cpu_mem_usage=True
+        )
+        self.target_model.config.output_hidden_states = True
         self.target_model.eval()
         self.fc = nn.Linear(self.hidden_size*3, self.hidden_size, bias=False)
         for param in self.target_model.parameters():
             param.requires_grad = False
+
+        # print("-" * 80)
+        # pprint(config)
+        # print("-" * 80)
 
         if not load_emb:
             self.embed_tokens = nn.Embedding(
@@ -513,26 +523,72 @@ class Model(nn.Module):
             import json
             import os
             try:
+                # with open(os.path.join(path, "model.safetensors.index.json"), "r") as f:
+                #     index_json = json.loads(f.read())
+                #     emb_path = index_json["weight_map"]["model.embed_tokens.weight"]
+                # with safe_open(os.path.join(path, emb_path),
+                #                framework="pt",
+                #                device="cpu") as f:
+                #     tensor_slice = f.get_slice("model.embed_tokens.weight")
                 with open(os.path.join(path, "model.safetensors.index.json"), "r") as f:
-                    index_json = json.loads(f.read())
-                    emb_path = index_json["weight_map"]["model.embed_tokens.weight"]
+                    index_json = json.load(f)
+
+                # find the right key for the embedding matrix
+                weight_map = index_json["weight_map"]
+                try:
+                    emb_key = next(
+                        k for k in weight_map.keys() if k.endswith("embed_tokens.weight")
+                    )
+                except StopIteration:
+                    raise KeyError(
+                        "No *embed_tokens.weight* entry in checkpoint index")
+
+                emb_path = weight_map[emb_key]
+
                 with safe_open(os.path.join(path, emb_path),
                                framework="pt",
                                device="cpu") as f:
-                    tensor_slice = f.get_slice("model.embed_tokens.weight")
+                    tensor_slice = f.get_slice(emb_key)
                     vocab_size, hidden_dim = tensor_slice.get_shape()
                     tensor = tensor_slice[:, :hidden_dim].float()
             except:
                 with open(os.path.join(path, "pytorch_model.bin.index.json"), "r") as f:
                     index_json = json.loads(f.read())
                     emb_path = index_json["weight_map"]["model.embed_tokens.weight"]
-                weights = torch.load(os.path.join(path, emb_path))
-                tensor = weights["model.embed_tokens.weight"].float()
-            self.embed_tokens = nn.Embedding(
-                config.vocab_size, config.hidden_size, self.padding_idx, _weight=tensor)
+                # weights = torch.load(os.path.join(path, emb_path))
+                # tensor = weights["model.embed_tokens.weight"].float()
+                weights = torch.load(os.path.join(
+                    path, emb_path), map_location="cpu")
+                tensor = weights[emb_key].float()
+            # self.embed_tokens = nn.Embedding(
+            #     config.vocab_size, config.hidden_size, self.padding_idx, _weight=tensor)
+            vocab_sz, hid_sz = tensor.shape
 
+            if vocab_sz != config.vocab_size:
+                print(
+                    f"[cnets] overriding config.vocab_size "
+                    f"{config.vocab_size} → {vocab_sz} to match checkpoint"
+                )
+                config.vocab_size = vocab_sz
+
+            if hid_sz != config.hidden_size:   # should not happen, but be safe
+                print(
+                    f"[cnets] overriding config.hidden_size "
+                    f"{config.hidden_size} → {hid_sz} to match checkpoint"
+                )
+                config.hidden_size = hid_sz
+
+            # Use the tensor directly; it is already on CPU and in float32
+            # so we can freeze it immediately.
+            self.embed_tokens = nn.Embedding.from_pretrained(
+                tensor, freeze=True, padding_idx=self.padding_idx,
+            )
+
+        assert config.draft_vocab_size is not None, "draft_vocab_size must be set"
         self.lm_head = nn.Linear(
-            config.hidden_size, config.draft_vocab_size, bias=False)
+            config.hidden_size, config.draft_vocab_size, bias=False,
+        )
+        # self.lm_head.to(torch.float16)
 
         for param in self.embed_tokens.parameters():
             param.requires_grad = False
@@ -545,7 +601,166 @@ class Model(nn.Module):
             dataset = dataset['train']
             # dataset = dataset.select(range(96))
             original_columns1 = dataset.column_names
-            num_proc = 48
+            num_proc = 1  # 8
+
+            def to_blocks(txt: str):
+                return [{"type": "text", "text": txt}]
+
+            # def preprocess_function(examples):
+            #     new_examples = {
+            #         # "conversation": [],
+            #         "input_ids": [],
+            #         "loss_mask": []
+            #     }
+            #     print(len(examples))
+            #     for i in range(len(examples['id'])):
+            #         # messages = [
+            #         #     {"role": "system",
+            #         #      "content": "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."},
+            #         # ]
+            #         # convroles = ["user", "assistant"]
+            #         roles = {"human": "user", "gpt": "model"}
+            #         source = examples['conversations'][i]
+            #         # system_prompt = (
+            #         #     "You are a helpful, respectful and honest assistant. Always answer as helpfully "
+            #         #     "as possible, while being safe. Your answers should not include any harmful, "
+            #         #     "unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure "
+            #         #     "that your responses are socially unbiased and positive in nature.\n\n"
+            #         #     "If a question does not make any sense, or is not factually coherent, explain why "
+            #         #     "instead of answering something not correct. If you don't know the answer to a "
+            #         #     "question, please don't share false information."
+            #         # )
+            #         messages = []
+            #         # convroles = ["user", "assistant"]
+            #         # source = examples['conversations'][i]
+            #         if not source:
+            #             continue
+            #         if roles[source[0]["from"]] != "user":
+            #         # if source[0]["from"] != "user":
+            #             # Skip the first one if it is not from human
+            #             source = source[1:]
+            #         # if source[-1]["from"] == "user":
+            #         if roles.get(source[-1]["from"]) == "user":
+            #             source = source[:-1]
+            #         # if not source or source[-1]["from"] != "assistant":
+            #         # if not source or roles.get(source[-1]["from"]) != "assistant":
+            #         if not source or roles.get(source[-1]["from"]) != "model":
+            #             continue
+            #         for j, sentence in enumerate(source):
+            #             raw_role = sentence["from"]
+            #             role     = roles.get(raw_role)
+            #             assert role is not None, f"unknown role {raw_role}"
+
+            #             # if j == 0 and role == "user":
+            #             #     merged = f"{system_prompt}\n\n{sentence['value']}"
+            #             # else:
+            #             #     merged = sentence["value"]
+            #             merged = sentence["value"]
+            #             messages.append({"role": role, "content": to_blocks(merged)})
+            #         conversation = tokenizer.apply_chat_template(
+            #             messages,
+            #             tokenize=False,
+            #             add_generation_prompt=False,
+            #         )
+
+            #         if not tokenizer.pad_token_id:
+            #             tokenizer.pad_token_id = tokenizer.unk_token_id
+
+            #         input_ids = tokenizer(
+            #             conversation,
+            #             return_tensors="pt",
+            #             max_length=2048,
+            #             add_special_tokens=False,
+            #         ).input_ids[0]
+            #         loss_mask = torch.ones_like(input_ids)
+            #         # print(i)
+
+            #         EOT = "<|end_of_turn|>\n"
+            #         SEP_USER  = f"{EOT}<|start_of_turn|>user\n"
+            #         SEP_MODEL = f"{EOT}<|start_of_turn|>model\n"
+
+            #         # after tokenizer.apply_chat_template(...)
+            #         turns = conversation.split(SEP_USER)
+            #         if len(turns) < 2: continue
+
+            #         turns[1] = turns[0] + SEP_USER + turns[1]
+            #         turns = turns[1:]
+            #         # tpl = tokenizer.apply_chat_template(
+            #         #     messages,
+            #         #     tokenize=True,
+            #         #     add_generation_prompt=False,
+            #         #     return_dict=True,
+            #         #     return_assistant_tokens_mask=True,
+            #         #     return_attention_mask=True,
+            #         #     return_tensors="pt",
+            #         # )
+            #         # # print(tpl)
+            #         # # ['input_ids', 'attention_mask', 'assistant_masks']
+            #         # # print([key for key in tpl.keys()])
+
+            #         # input_ids = tpl["input_ids"][0]
+            #         # loss_mask = tpl["assistant_tokens_mask"][0].to(torch.long)
+            #         # # loss_mask = tpl["assistant_masks"][0].to(torch.long)
+            #         # # attention_mask = tpl["attention_mask"][0]
+            #         # # if loss_mask.sum().item() == 0:
+            #         # #     continue
+
+            #         # new_examples["input_ids"].append(input_ids[None, :])
+            #         # new_examples["loss_mask"].append(loss_mask[None, :])
+            #         # # new_examples["attention_mask"].append(attention_mask[None, :])
+            #         # continue
+
+            #         cur_len = 1
+            #         loss_mask[:cur_len] = 0
+            #         for i, turn in enumerate(turns):
+            #             if turn == "":
+            #                 break
+            #             turn_len = len(tokenizer(turn).input_ids)
+
+            #             parts = turn.split(SEP_USER)
+            #             if len(parts) != 2:
+            #                 break
+            #             parts[0] += SEP_USER
+            #             instruction_len = len(
+            #                 tokenizer(parts[0]).input_ids) - 1
+
+            #             # Ignore the user instructions
+            #             if i == 0:
+            #                 loss_mask[cur_len: cur_len +
+            #                           instruction_len - 2] = 0
+            #             else:
+            #                 loss_mask[cur_len - 3: cur_len +
+            #                           instruction_len + 1] = 0
+            #             cur_len += turn_len
+            #             if i != 0:
+            #                 cur_len += 3
+            #             # cur_len+=2
+
+            #             # if i != 0 and not tokenizer.legacy:
+            #             #     # The legacy and non-legacy modes handle special tokens differently
+            #             #     cur_len -= 1
+
+            #         loss_mask[cur_len:] = 0
+
+            #         # new_examples["conversation"].append(conversation)
+            #         new_examples["input_ids"].append(input_ids[None, :])
+            #         new_examples["loss_mask"].append(loss_mask[None, :])
+
+            #     return new_examples
+
+            def _normalize(value):
+                # Acceptable types for chat_template
+                if isinstance(value, str):
+                    return value
+                if isinstance(value, list):
+                    # Already block format?
+                    if all(isinstance(el, dict) and "type" in el and "text" in el for el in value):
+                        return value
+                    # List of strings → join them
+                    if all(isinstance(el, str) for el in value):
+                        return "\n".join(value)
+                # Fallback: coerce to string
+                return str(value)
 
             def preprocess_function(examples):
                 new_examples = {
@@ -555,11 +770,11 @@ class Model(nn.Module):
                 }
                 for i in range(len(examples['id'])):
                     messages = [
-                        {"role": "system",
-                         "content": "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."},
+                        # {"role": "system",
+                        #  "content": "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.  Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n\nIf a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."},
                     ]
-                    convroles = ["user", "assistant"]
-                    roles = {"human": "user", "gpt": "assistant"}
+                    convroles = ["user", "model"]
+                    roles = {"human": "user", "gpt": "model"}
                     source = examples['conversations'][i]
                     if not source:
                         continue
@@ -572,7 +787,7 @@ class Model(nn.Module):
                         # if sentence["from"]=="gpt":
                         #     sentence["value"]=" "+sentence["value"]
                         messages.append(
-                            {"role": role, "content": sentence["value"]}
+                            {"role": role, "content": _normalize(sentence["value"])}
                         )
                     conversation = tokenizer.apply_chat_template(
                         messages,
@@ -592,15 +807,19 @@ class Model(nn.Module):
                     loss_mask = torch.ones_like(input_ids)
                     # print(i)
 
-                    sep = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                    # between a user turn and the assistant's reply
+                    sep = "<end_of_turn>\n<start_of_turn>model\n"
+
+                    # between an assistant turn and the next user turn
+                    sep2 = "<end_of_turn>\n<start_of_turn>user\n"
 
                     total_len = len(input_ids)
 
-                    sep2 = "<|eot_id|><|start_header_id|>user<|end_header_id|>"
                     turns = conversation.split(sep2)
 
-                    turns[1] = turns[0] + sep2 + turns[1]
-                    turns = turns[1:]
+                    if len(turns) >= 2:
+                        turns[1] = turns[0] + sep2 + turns[1]
+                        turns = turns[1:]
 
                     cur_len = 1
                     loss_mask[:cur_len] = 0
@@ -651,6 +870,8 @@ class Model(nn.Module):
             # dataset.set_format(type="torch")
 
             num_processes = num_proc
+            if len(dataset) == 0:
+                raise ValueError("No usable samples left after preprocessing.")
             chunk_size = len(dataset) // num_processes + \
                 (len(dataset) % num_processes > 0)
             chunks = [dataset[i:i + chunk_size]

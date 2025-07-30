@@ -4,7 +4,7 @@
 import copy
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -143,8 +143,7 @@ class Gemma3RMSNorm(nn.Module):
 
     def forward(self, x):
         output = self._norm(x.float())
-        # Llama does x.to(float16) * w whilst Gemma3 is (x * w).to(float16)
-        # See https://github.com/huggingface/transformers/pull/29402
+        # https://github.com/huggingface/transformers/pull/29402
         output = output * (1.0 + self.weight.float())
         return output.type_as(x)
 
@@ -575,7 +574,7 @@ class Gemma3TextModel(Gemma3PreTrainedModel):
                 "cache_position": cache_position,
                 "past_key_values": past_key_values,
             }
-            # [MODIFIED] Force mask dtypes to `float32` (mirrors the Llama patch that
+            # [MODIFIED] Force mask dtypes to `float32` (mirrors the Gemma3 patch that
             #           always casts inside `_prepare_decoder_attention_mask`).
             causal_mask_mapping = {
                 "full_attention": create_causal_mask(**mask_kwargs).to(torch.float32),
@@ -916,6 +915,9 @@ class Gemma3Model(Gemma3PreTrainedModel):
         >>> processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Where is the cat standing?\nsnow"
         ```"""
+        capture_layers = {0, len(self.layers) // 2, len(self.layers) - 3}
+        _eagle_hidden: List[torch.Tensor] = []
+
         if (input_ids is None) ^ (inputs_embeds is not None):
             raise ValueError(
                 "You must specify exactly one of input_ids or inputs_embeds")
@@ -996,6 +998,16 @@ class Gemma3Model(Gemma3PreTrainedModel):
                 "sliding_attention": create_sliding_window_causal_mask(**mask_kwargs),
             }
 
+        for idx, decoder_layer in enumerate(self.layers):
+            if idx in capture_layers:
+                _eagle_hidden.append(hidden_states)
+        hidden_states = self.norm(hidden_states)
+
+        # Append three captured activations so cnets.py can do:
+        #     h0, h1, h2 = outs.hidden_states[:3]
+        if not output_hidden_states:
+            all_hidden_states = tuple(_eagle_hidden)
+
         outputs = self.language_model(
             attention_mask=causal_mask_mapping,
             position_ids=position_ids,
@@ -1012,7 +1024,8 @@ class Gemma3Model(Gemma3PreTrainedModel):
         return Gemma3ModelOutputWithPast(
             last_hidden_state=outputs.last_hidden_state,
             past_key_values=outputs.past_key_values if use_cache else None,
-            hidden_states=outputs.hidden_states,
+            # hidden_states=outputs.hidden_states,
+            hidden_states=all_hidden_states,
             attentions=outputs.attentions,
             image_hidden_states=image_features if pixel_values is not None else None,
         )
