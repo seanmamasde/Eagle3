@@ -3,10 +3,10 @@ import random
 import argparse
 from pathlib import Path
 
-INPUT_FILE = 'regenerated/sharegpt_gpt4_full_original.jsonl'
-TRAIN_FILE = 'regenerated/sharegpt_gpt4_cleaned_train.jsonl'
-TEST_FILE = 'regenerated/sharegpt_gpt4_cleaned_test.jsonl'
-OUTPUT_FILE = 'regenerated/sharegpt_gpt4_cleaned_full.jsonl'
+INPUT_FILE = 'gemma3_sharegpt/regenerated_0_to_100480.jsonl'
+TRAIN_FILE = 'gemma3_sharegpt/regenerated_0_to_100480_train.jsonl'
+TEST_FILE = 'gemma3_sharegpt/regenerated_0_to_100480_test.jsonl'
+OUTPUT_FILE = 'gemma3_sharegpt/regenerated_0_to_100480_cleaned.jsonl'
 
 TRAIN_RATIO = 0.95
 RANDOM_SEED = 42

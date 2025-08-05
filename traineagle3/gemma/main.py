@@ -40,14 +40,12 @@ torch.cuda.ipc_collect()
 
 parser = argparse.ArgumentParser(description='sp')
 parser.add_argument('--basepath', type=str,
-                    default='/home/seanma0627/src/eagle3/weights/gemma3')
+                    default='/home/seanma0627/src/eagle3/weights/gemma3-27b')
 parser.add_argument('--trainpath', type=str,
-                    # default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_gpt4_cleaned_train.jsonl")
-                    # default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_train_1pct_gemma3.jsonl")
+                    # default="/home/seanma0627/src/eagle3/data_regen/gemma3_sharegpt/regenerated_0_to_100480_train.jsonl")
                     default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_train_1pct.jsonl")
 parser.add_argument('--testpath', type=str,
-                    # default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_gpt4_cleaned_test.jsonl")
-                    # default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_test_1pct_gemma3.jsonl")
+                    # default="/home/seanma0627/src/eagle3/data_regen/gemma3_sharegpt/regenerated_0_to_100480_test.jsonl")
                     default="/home/seanma0627/src/eagle3/data_regen/regenerated/sharegpt_test_1pct.jsonl")
 parser.add_argument('--savedir', type=str, default='saved_models')
 parser.add_argument("--local_rank", type=int, default=-1,
@@ -401,64 +399,21 @@ txt_cfg = EConfig(**wrapper_cfg.text_config.to_dict())
 # print("hidden_size           :", config.hidden_size)
 # print("num_attention_heads   :", config.num_attention_heads)
 # print("head_dim              :", getattr(config, "head_dim", None))
-"""
-EConfig {
-  "_sliding_window_pattern": 6,
-  "attention_bias": false,
-  "attention_dropout": 0.0,
-  "attn_logit_softcapping": null,
-  "bos_token_id": 2,
-  "draft_vocab_size": null,
-  "eos_token_id": 1,
-  "final_logit_softcapping": null,
-  "head_dim": 256,
-  "hidden_act": "silu",
-  "hidden_activation": "gelu_pytorch_tanh",
-  "hidden_size": 2304,
-  "initializer_range": 0.02,
-  "intermediate_size": 9216,
-  "layer_types": [
-    "sliding_attention"
-  ],
-  "max_position_embeddings": 131072,
-  "model_type": "gemma3_text",
-  "num_attention_heads": 8,
-  "num_hidden_layers": 1,
-  "num_key_value_heads": 4,
-  "pad_token_id": 0,
-  "pretraining_tp": 1,
-  "query_pre_attn_scalar": 256,
-  "rms_norm_eps": 1e-06,
-  "rope_local_base_freq": 10000.0,
-  "rope_scaling": null,
-  "rope_theta": 1000000.0,
-  "sliding_window": 1024,
-  "tie_word_embeddings": true,
-  "transformers_version": "4.53.2",
-  "use_cache": true,
-  "vocab_size": 262208
-}
-"""
+# Gemma-3 27B • 1-layer EAGLE head
 txt_cfg.torch_dtype = torch.bfloat16
-txt_cfg.hidden_size = 2560
-txt_cfg.head_dim = 256
-txt_cfg.num_attention_heads = 8
-txt_cfg.num_key_value_heads = 4
-txt_cfg.intermediate_size = 10240
-txt_cfg.num_hidden_layers = 26
+txt_cfg.hidden_size = 5376                 # from Gemma-3 27B text_config
+txt_cfg.head_dim = 128                     # 27B-specific head width
+txt_cfg.num_attention_heads = 32           # matches base model
+txt_cfg.num_key_value_heads = 16           # ditto
+txt_cfg.intermediate_size = 21504          # FFN size for 27B
+txt_cfg.num_hidden_layers = 2
 txt_cfg.layer_types = [
-    "sliding_attention", "sliding_attention", "sliding_attention",
-    "sliding_attention", "sliding_attention", "full_attention",
-    "sliding_attention", "sliding_attention", "sliding_attention",
-    "sliding_attention", "sliding_attention", "full_attention",
-    "sliding_attention", "sliding_attention", "sliding_attention",
-    "sliding_attention", "sliding_attention", "full_attention",
-    "sliding_attention", "sliding_attention", "sliding_attention",
-    "sliding_attention", "sliding_attention", "full_attention",
-    "sliding_attention", "sliding_attention",
+    "full_attention",
+    "full_attention",
 ]
+# unchanged; shared with base Gemma-3 family
 txt_cfg.vocab_size = 262_208
-txt_cfg.sliding_window = 1024
+txt_cfg.sliding_window = 1024              # keep window for long-ctx streaming
 txt_cfg._sliding_window_pattern = 6
 txt_cfg.bos_token_id, txt_cfg.eos_token_id, txt_cfg.pad_token_id = 1, 2, 0
 txt_cfg.attention_bias = False
@@ -468,11 +423,11 @@ txt_cfg.rms_norm_eps = 1e-6
 txt_cfg.initializer_range = 0.02
 txt_cfg.tie_word_embeddings = True
 txt_cfg.use_cache = True
-txt_cfg.rope_scaling = None
-txt_cfg.max_position_embeddings = 131_072
-txt_cfg.draft_vocab_size = 12340
-txt_cfg.attn_implementation = "eager" 
-# print(txt_cfg)
+txt_cfg.rope_scaling = {"type": "linear", "factor": 8.0}  # match 27B config
+txt_cfg.max_position_embeddings = 131_072  # long-ctx limit from Gemma-3 docs
+txt_cfg.draft_vocab_size = 12340           # carry over from 4B training setup
+txt_cfg.attn_implementation = "eager"
+txt_cfg.query_pre_attn_scalar = 168        # extra scalar present in 27B spec
 
 model = Model(txt_cfg, path=args.basepath, load_emb=True, load_head=True)
 # with zero.Init(config_dict_or_path=ds_config, dtype=torch.float16):
@@ -632,9 +587,10 @@ for epoch in range(start_epoch, num_epochs):
     # if epoch % 10 == 0:
     #     deepspeed.DeepSpeedEngine.save_checkpoint(
     #         model_engine, save_dir=f"{args.savedir}/state_{epoch}")
+
     # ---- save after every epoch (only one epoch in this run) ----
     ckpt_dir = os.path.join(args.savedir, f"epoch_{epoch}")
-    model_engine.save_checkpoint(ckpt_dir)
+    model_engine.save_checkpoint(ckpt_dir, exclude_frozen_parameters=True)
     if global_rank == 0:
         from deepspeed.utils.zero_to_fp32 import \
             get_fp32_state_dict_from_zero_checkpoint

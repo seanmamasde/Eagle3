@@ -13,16 +13,16 @@
   "mm_tokens_per_image": 256,
   "model_type": "gemma3",
   "text_config": {
-    "hidden_size": 2560,
-    "head_dim": 256,
-    "num_attention_heads": 10,
-    "intermediate_size": 10240,
-    "num_hidden_layers": 1,
+    "hidden_size": 5376,
+    "head_dim": 128,
+    "num_attention_heads": 32,
+    "intermediate_size": 21504,
+    "num_hidden_layers": 2,
 
     "model_type": "gemma3_text",
     "rope_scaling": {
       "factor": 8.0,
-      "rope_type": "linear"
+      "type": "linear"
     },
     "sliding_window": 1024
   },
@@ -40,6 +40,6 @@
   },
 
   "use_cache": true,
-  "draft_vocab_size": 45048,
+  "draft_vocab_size": 12340,
   "vocab_size": 262208
 }

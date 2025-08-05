@@ -491,11 +491,11 @@ class Model(nn.Module):
         self.gradient_checkpointing = False
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
-        # self.hidden_size = config.hidden_size
-        self.hidden_size = 2560
+        self.hidden_size = config.hidden_size
+        # self.hidden_size = 2560
         self.draft_vocab_size = config.draft_vocab_size
-        if self.draft_vocab_size is None:
-            self.draft_vocab_size = 45048
+        # if self.draft_vocab_size is None:
+        #     self.draft_vocab_size = 45048
         self.norm = Gemma3RMSNorm(self.hidden_size, eps=config.rms_norm_eps)
         self.length = 7
         self.target_model = Gemma3ForCausalLM.from_pretrained(
@@ -787,7 +787,8 @@ class Model(nn.Module):
                         # if sentence["from"]=="gpt":
                         #     sentence["value"]=" "+sentence["value"]
                         messages.append(
-                            {"role": role, "content": _normalize(sentence["value"])}
+                            {"role": role, "content": _normalize(
+                                sentence["value"])}
                         )
                     conversation = tokenizer.apply_chat_template(
                         messages,
@@ -938,6 +939,7 @@ class Model(nn.Module):
         device = input_ids.device
         outs = self.target_model(
             input_ids=input_ids, attention_mask=attention_mask)
+        # print(len(outs.hidden_states))
         hidden_states0 = outs.hidden_states[0]
         hidden_states1 = outs.hidden_states[1]
         hidden_states2 = outs.hidden_states[2]

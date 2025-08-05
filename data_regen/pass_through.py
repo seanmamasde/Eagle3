@@ -71,6 +71,31 @@ python main.py \
   --threads 64 \
   --batch_save 100 \
   --timeout 1000
+
+
+python pass_through.py \
+  --dataset ./regenerated/sharegpt_gpt4_full_original.jsonl \
+  --vllm_url http://localhost:8000/v1/chat/completions \
+  --api_key mytoken123 \
+  --output_dir ./data_regen/gemma3_sharegpt \
+  --mode threadpool \
+  --threads 256 \
+  --batch_save 10000 \
+  --timeout 10000
+
+python pass_through.py   --dataset ./regenerated/sharegpt_gpt4_full_original.jsonl   --vllm_url http://localhost:8000/v1/chat/completions   --api_key mytoken123   --output_dir ./gemma3_sharegpt   --mode threadpool   --threads 512   --batch_save 50000   --timeout 10000
+singularity exec --nv --bind /home/seanma0627/src/eagle3/weights:/models vllm.sif python3 -m vllm.entrypoints.openai.api_server --host 0.0.0.0 --port 8000 --model /models/gemma3 --served-model-name gemma3 --api-key mytoken123 --tensor-parallel-size 4 --tokenizer-mode auto --max-model-len 262144
+
+
+python pass_through.py   \
+    --dataset ./sharegpt_gpt4_full_original.jsonl   \
+    --vllm_url https://inner-medusa.genai.nchc.org.tw/v1/chat/completions   \
+    --api_key sk-5i0RthKOKsKZ__8A98d8_A   \
+    --output_dir ./gemma3_sharegpt   \
+    --mode threadpool   \
+    --threads 1024   \
+    --batch_save 10000   \
+    --timeout 100000
 """
 
 import json
@@ -87,7 +112,7 @@ from tqdm import tqdm
 import pyarrow.parquet as pq
 import os
 import glob
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 
 class ShareGPTReGenerator:
@@ -115,7 +140,10 @@ class ShareGPTReGenerator:
         self.request_timeout = request_timeout
         self.api_key = api_key
         self.client: OpenAI = OpenAI(
-            api_key=self.api_key, base_url=self.vllm_url.rsplit("/v1", 1)[0])
+            api_key=self.api_key,
+            # base_url="http://localhost:8000/v1/"
+            base_url=self.vllm_url.rsplit("/v1", 1)[0]
+        )
 
         # 用于线程安全的操作
         self.result_lock = threading.Lock()
@@ -174,75 +202,130 @@ class ShareGPTReGenerator:
 
         return data
 
+    # def call_vllm_api(self, prompt: str) -> str:
+    #     """
+    #     调用vLLM API生成回答
+
+    #     Args:
+    #         prompt: 输入提示
+
+    #     Returns:
+    #         生成的回答
+    #     """
+    #     try:
+    #         # 实现简单的速率限制
+    #         with self.api_rate_limit_lock:
+    #             current_time = time.time()
+    #             time_since_last_call = current_time - self.last_api_call
+    #             if time_since_last_call < self.min_api_interval:
+    #                 time.sleep(self.min_api_interval - time_since_last_call)
+    #             self.last_api_call = time.time()
+
+    #         payload = {
+    #             # "model": "./weights/meta-llama3.1-8b-instruct/",
+    #             # "model": "./weights/meta-llama3.1-8b/",
+    #             # "model": "weights/taide-llama3.1-8b",
+    #             # "model": "Llama-3.1-TAIDE-LX-8B-Chat",
+    #             # "model": "gemma3",
+    #             "model": "Google-Gemma-3-27B",
+    #             "messages": [
+    #                 {"role": "user", "content": prompt}
+    #             ],
+    #             "temperature": self.temperature,
+    #             "max_tokens": self.max_tokens,
+    #             "stop": []  # 可根据需要添加停止词
+    #         }
+
+    #         # response = requests.post(
+    #         #     self.vllm_url, json=payload, timeout=self.request_timeout)
+    #         headers = {
+    #             "Authorization": f"Bearer {self.api_key}",
+    #             "Content-Type": "application/json"
+    #         }
+    #         # response = requests.post(
+    #         #     self.vllm_url,
+    #         #     json=payload,
+    #         #     headers=headers,
+    #         #     timeout=self.request_timeout,
+    #         # )
+    #         # response.raise_for_status()
+    #         # result = response.json()
+    #         # return result["choices"][0]["message"]["content"]
+    #         resp = self.client.chat.completions.create(
+    #             model=payload["model"],
+    #             messages=payload["messages"],
+    #             temperature=self.temperature,
+    #             max_tokens=self.max_tokens,
+    #             stop=payload.get("stop", None),
+    #             timeout=self.request_timeout        # SDK-level timeout
+    #         )
+    #         return resp.choices[0].message.content
+    #         # print(result["choices"][0]["message"]["content"])
+    #         # vLLM API返回格式可能根据您的部署有所不同，请根据实际情况调整
+    #         # if "text" in result:
+    #         #     return result["text"]
+    #         # elif "choices" in result and len(result["choices"]) > 0:
+    #         #     return result["choices"][0]["text"]
+    #         # else:
+    #         #     print(f"未知的API响应格式: {result}")
+    #         #     return ""
+
+    #     except Exception as e:
+    #         print(f"调用vLLM API时出错: {e}")
+    #         return ""
+
     def call_vllm_api(self, prompt: str) -> str:
         """
-        调用vLLM API生成回答
-
-        Args:
-            prompt: 输入提示
-
-        Returns:
-            生成的回答
+        调用 vLLM API，并在所有 4xx/5xx 错误时重试（无限次），
+        采用指数退避，最高退避 60s。
         """
-        try:
-            # 实现简单的速率限制
-            with self.api_rate_limit_lock:
-                current_time = time.time()
-                time_since_last_call = current_time - self.last_api_call
-                if time_since_last_call < self.min_api_interval:
-                    time.sleep(self.min_api_interval - time_since_last_call)
-                self.last_api_call = time.time()
+        backoff = 1        # 初始退避秒数
+        max_backoff = 10   # 最大退避秒数
 
-            payload = {
-                # "model": "./weights/meta-llama3.1-8b-instruct/",
-                # "model": "./weights/meta-llama3.1-8b/",
-                # "model": "weights/taide-llama3.1-8b",
-                "model": "Llama-3.1-TAIDE-LX-8B-Chat",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "stop": []  # 可根据需要添加停止词
-            }
+        while True:
+            try:
+                # 速率限制
+                with self.api_rate_limit_lock:
+                    now = time.time()
+                    delta = now - self.last_api_call
+                    if delta < self.min_api_interval:
+                        time.sleep(self.min_api_interval - delta)
+                    self.last_api_call = time.time()
 
-            # response = requests.post(
-            #     self.vllm_url, json=payload, timeout=self.request_timeout)
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            # response = requests.post(
-            #     self.vllm_url,
-            #     json=payload,
-            #     headers=headers,
-            #     timeout=self.request_timeout,
-            # )
-            # response.raise_for_status()
-            # result = response.json()
-            # return result["choices"][0]["message"]["content"]
-            resp = self.client.chat.completions.create(
-                model=payload["model"],
-                messages=payload["messages"],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                stop=payload.get("stop", None),
-                timeout=self.request_timeout        # SDK-level timeout
-            )
-            return resp.choices[0].message.content
-            # print(result["choices"][0]["message"]["content"])
-            # vLLM API返回格式可能根据您的部署有所不同，请根据实际情况调整
-            # if "text" in result:
-            #     return result["text"]
-            # elif "choices" in result and len(result["choices"]) > 0:
-            #     return result["choices"][0]["text"]
-            # else:
-            #     print(f"未知的API响应格式: {result}")
-            #     return ""
+                resp = self.client.chat.completions.create(
+                    model="Google-Gemma-3-27B",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    stop=[],
+                    timeout=self.request_timeout
+                )
+                return resp.choices[0].message.content
 
-        except Exception as e:
-            print(f"调用vLLM API时出错: {e}")
-            return ""
+            except OpenAIError as e:
+                # 尝试获取 SDK 提供的 HTTP 状态码
+                code = getattr(e, "http_status", None) or getattr(
+                    e, "status_code", None)
+            except Exception as e:
+                # 如果是 requests 或其他异常，自行检查 response 对象
+                code = None
+                if hasattr(e, "response") and hasattr(e.response, "status_code"):
+                    code = e.response.status_code
+                else:
+                    # 不是 HTTP 错误，立即退出
+                    print(f"非 HTTP 错误，放弃重试：{e}")
+                    return ""
+
+            # 统一在这里处理 HTTP 错误重试逻辑
+            if code and 400 <= code < 600:
+                print(f"收到 HTTP {code} 错误，等待 {backoff}s 后重试...")
+                time.sleep(backoff)
+                backoff = min(backoff + 1, max_backoff)
+                continue
+            else:
+                # 如果 code 是 None 或不在 4xx/5xx，打印并返回空
+                print(f"遇到不可重试的错误 ({code})，放弃：{e}")
+                return ""
 
     def process_conversation(self, conversation: Dict, idx: int) -> Dict:
         """
